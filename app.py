@@ -42,7 +42,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
             st.info("Подключение к нейросети...")
             rf = Roboflow(api_key=api_key_input)
             project = rf.workspace().project("uz_ir_pharmacy")
-            model = project.version(2).model # Поменяй на нужную версию, если обновил модель
+            model = project.version(1).model # Поменяй на нужную версию, если обновил модель
             
             st.info("Чтение планов матрицы...")
             df_matrix = pd.read_excel(matrix_file)
@@ -155,10 +155,12 @@ if st.button("🚀 Запустить проверку", type="primary"):
                         row_data["ИТОГО ПО ПОЛКЕ (%)"] = round(sum_of_percentages / planned_items_count, 1)
                         row_data["Факт полки (шт)"] = total_fact_packs
                         row_data["План полки (шт)"] = total_plan_packs
+                        row_data["Разница полки (шт)"] = total_fact_packs - total_plan_packs # Разница (Факт - План)
                     else:
-                        row_data["ИТОГО ПО ПОЛКЕ (%)"] = "Нет плана"
+                        row_data["ИТОГО ПО ПОЛКЕ (%)"] = "Нет Плана"
                         row_data["Факт полки (шт)"] = "-"
                         row_data["План полки (шт)"] = "-"
+                        row_data["Разница полки (шт)"] = "-"
 
                     master_results.append(row_data)
 
@@ -172,8 +174,9 @@ if st.button("🚀 Запустить проверку", type="primary"):
             # 3. СБОРКА И КОМБИНИРОВАННАЯ РАСКРАСКА
             # ==========================================
             if master_results:
+                # В список базовых колонок добавлена "Разница полки (шт)"
                 base_cols = ["ID Визита", "Дата", "ID Аптеки", "Название полки", "Ссылка на фото", 
-                             "ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)"]
+                             "ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)", "Разница полки (шт)"]
                 
                 product_cols = []
                 for p in all_unique_products:
@@ -188,7 +191,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
                 buffer = io.BytesIO()
                 
                 # Цвета для ЗАГОЛОВКОВ (Строка 1)
-                color_totals_header = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid") # Светло-желтый для ИТОГО
+                color_totals_header = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid") # Светло-желтый для блоков ИТОГО
                 product_colors_list = [
                     PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"), # Светло-зеленый
                     PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"), # Светло-синий
@@ -198,10 +201,8 @@ if st.button("🚀 Запустить проверку", type="primary"):
                     PatternFill(start_color="D0F0C0", end_color="D0F0C0", fill_type="solid")  # Чайный зеленый
                 ]
 
-                # Цвета для ДАННЫХ (Светофор ниже 1 строки)
-                fill_green = PatternFill(start_color="E6F4EA", end_color="E6F4EA", fill_type="solid") # Нежно-зеленый (100%)
-                fill_red = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")   # Нежно-розовый (<100%)
-                fill_grey = PatternFill(start_color="F1F3F4", end_color="F1F3F4", fill_type="solid")  # Светло-серый (Not in Plan)
+                # Цвета для ДАННЫХ (Пастельно-розовый для недочетов)
+                fill_red = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")   
 
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     df_final.to_excel(writer, index=False, sheet_name='Аудит')
@@ -211,10 +212,10 @@ if st.button("🚀 Запустить проверку", type="primary"):
                     
                     # КРАСИМ ЗАГОЛОВКИ (Только строка 1)
                     for col_idx, header in enumerate(headers, 1):
-                        # Сделаем текст заголовков жирным для красоты
                         ws_out.cell(row=1, column=col_idx).font = Font(bold=True)
                         
-                        if header in ["ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)"]:
+                        # Новая колонка автоматически включена в желтую группу заголовков
+                        if header in ["ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)", "Разница полки (шт)"]:
                             ws_out.cell(row=1, column=col_idx).fill = color_totals_header
                         else:
                             for p_idx, p in enumerate(all_unique_products):
@@ -224,20 +225,25 @@ if st.button("🚀 Запустить проверку", type="primary"):
                                     ws_out.cell(row=1, column=col_idx).fill = color_to_use
                                     break
                     
-                    # КРАСИМ ДАННЫХ (Строки со 2-й и ниже) — Только проблемные зоны (<100%)
+                    # КРАСИМ ДАННЫЕ (Строки со 2-й и ниже) — Строгий светофор только на проблемы (<100% или Разница < 0)
                     for row_idx in range(2, len(df_final) + 2):
                         for col_idx, header in enumerate(headers, 1):
                             cell_value = ws_out.cell(row=row_idx, column=col_idx).value
                             
+                            # 1. Проверяем колонки процентов
                             if header == "ИТОГО ПО ПОЛКЕ (%)" or str(header).startswith("%"):
-                                # Красим только если это число и оно меньше 100
                                 if isinstance(cell_value, (int, float)) and cell_value < 100:
+                                    ws_out.cell(row=row_idx, column=col_idx).fill = fill_red
+                            
+                            # 2. Проверяем колонку разницы по пачкам
+                            elif header == "Разница полки (шт)":
+                                if isinstance(cell_value, (int, float)) and cell_value < 0:
                                     ws_out.cell(row=row_idx, column=col_idx).fill = fill_red
 
                 st.download_button(
                     label="📥 Скачать итоговый отчет",
                     data=buffer.getvalue(),
-                    file_name="Итоговый_Отчет.xlsx",
+                    file_name="Итоговый_отчет.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:

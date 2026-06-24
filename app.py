@@ -30,7 +30,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
             st.info("Подключение к нейросети...")
             rf = Roboflow(api_key=api_key_input)
             project = rf.workspace().project("uz_ir_pharmacy")
-            model = project.version(1).model # Поменяй на 2, когда обучишь новую версию
+            model = project.version(2).model # Поменяй на 2, когда обучишь новую версию
             
             # 2. Чтение Матрицы
             st.info("Чтение планов матрицы...")

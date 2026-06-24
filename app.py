@@ -9,6 +9,7 @@ from roboflow import Roboflow
 # Настройка страницы браузера
 st.set_page_config(page_title="Аудит Выкладки", layout="centered")
 
+st.image("logo.png", width=250) 
 st.title("💊 Автоматический аудит выкладки")
 st.write("Загрузите файл матрицы (план) и файл с фотоотчетом (ссылками), чтобы нейросеть проверила наличие препаратов.")
 

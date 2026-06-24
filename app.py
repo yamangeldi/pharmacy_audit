@@ -224,19 +224,15 @@ if st.button("🚀 Запустить проверку", type="primary"):
                                     ws_out.cell(row=1, column=col_idx).fill = color_to_use
                                     break
                     
-                    # КРАСИМ ДАННЫХ (Строки со 2-й и ниже) — Только Светофор для колонок с процентами
+                    # КРАСИМ ДАННЫХ (Строки со 2-й и ниже) — Только проблемные зоны (<100%)
                     for row_idx in range(2, len(df_final) + 2):
                         for col_idx, header in enumerate(headers, 1):
                             cell_value = ws_out.cell(row=row_idx, column=col_idx).value
                             
                             if header == "ИТОГО ПО ПОЛКЕ (%)" or str(header).startswith("%"):
-                                if cell_value in ["Not in Plan", "Нет плана"]:
-                                    ws_out.cell(row=row_idx, column=col_idx).fill = fill_grey
-                                elif isinstance(cell_value, (int, float)):
-                                    if cell_value >= 100:
-                                        ws_out.cell(row=row_idx, column=col_idx).fill = fill_green
-                                    else:
-                                        ws_out.cell(row=row_idx, column=col_idx).fill = fill_red
+                                # Красим только если это число и оно меньше 100
+                                if isinstance(cell_value, (int, float)) and cell_value < 100:
+                                    ws_out.cell(row=row_idx, column=col_idx).fill = fill_red
 
                 st.download_button(
                     label="📥 Скачать итоговый отчет",

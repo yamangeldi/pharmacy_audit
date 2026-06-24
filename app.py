@@ -5,12 +5,11 @@ import requests
 import openpyxl
 import streamlit as st
 from roboflow import Roboflow
-from openpyxl.styles import PatternFill # Библиотека для раскраски ячеек
+from openpyxl.styles import PatternFill
 
 # ==========================================
 # 1. СЛОВАРЬ КРАСИВЫХ НАЗВАНИЙ ПРЕПАРАТОВ
 # ==========================================
-# Здесь ты можешь менять названия на любые удобные
 PRODUCT_NAMES = {
     "cardiom_150_100": "Кардиомагнил 150мг",
     "ent_2_10": "Энтерожермина 2мл №10",
@@ -43,8 +42,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
             st.info("Подключение к нейросети...")
             rf = Roboflow(api_key=api_key_input)
             project = rf.workspace().project("uz_ir_pharmacy")
-            # Если ты обучал модель, поменяй тут 1 на нужную версию
-            model = project.version(2).model 
+            model = project.version(2).model # Поменяй на нужную версию, если обновил модель
             
             st.info("Чтение планов матрицы...")
             df_matrix = pd.read_excel(matrix_file)
@@ -131,7 +129,6 @@ if st.button("🚀 Запустить проверку", type="primary"):
                     total_fact_packs = 0
 
                     for product in all_unique_products:
-                        # Получаем красивое название из словаря, если его там нет - оставляем старое
                         readable_name = PRODUCT_NAMES.get(product, product)
                         
                         col_pct = f"% {readable_name}"
@@ -141,10 +138,10 @@ if st.button("🚀 Запустить проверку", type="primary"):
 
                         if target > 0:
                             fact = shelf_fact.get(product, 0)
-                            pct = min((fact / target) * 100, 100) # Процент не больше 100
+                            pct = min((fact / target) * 100, 100) 
                             
                             row_data[col_pct] = round(pct, 1)
-                            row_data[col_fact] = fact # А тут точное количество пачек
+                            row_data[col_fact] = fact 
                             
                             sum_of_percentages += pct
                             planned_items_count += 1
@@ -172,10 +169,9 @@ if st.button("🚀 Запустить проверку", type="primary"):
                         os.remove(temp_filename)
 
             # ==========================================
-            # 3. СБОРКА И РАСКРАСКА EXCEL
+            # 3. СБОРКА И УМНАЯ РАСКРАСКА (СВЕТОФОР)
             # ==========================================
             if master_results:
-                # Порядок колонок
                 base_cols = ["ID Визита", "Дата", "ID Аптеки", "Название полки", "Ссылка на фото", 
                              "ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)"]
                 
@@ -189,43 +185,38 @@ if st.button("🚀 Запустить проверку", type="primary"):
                 st.success("✅ Анализ завершен!")
                 st.dataframe(df_final)
                 
-                # РАСКРАСКА
                 buffer = io.BytesIO()
                 
-                # Набор светлых пастельных цветов для препаратов
-                color_totals = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid") # Светло-желтый для ИТОГО
-                product_colors_list = [
-                    PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid"), # Светло-зеленый
-                    PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid"), # Светло-синий
-                    PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid"), # Персиковый
-                    PatternFill(start_color="E4DFEC", end_color="E4DFEC", fill_type="solid"), # Светло-фиолетовый
-                    PatternFill(start_color="FDCEE8", end_color="FDCEE8", fill_type="solid"), # Светло-розовый
-                    PatternFill(start_color="D0F0C0", end_color="D0F0C0", fill_type="solid")  # Чайный зеленый
-                ]
+                # Пастельные тона для светофора
+                fill_green = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid") # Нежно-зеленый
+                fill_red = PatternFill(start_color="F4CCCC", end_color="F4CCCC", fill_type="solid")   # Нежно-розовый
+                fill_grey = PatternFill(start_color="EFEFEF", end_color="EFEFEF", fill_type="solid")  # Светло-серый
 
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                     df_final.to_excel(writer, index=False, sheet_name='Аудит')
                     ws_out = writer.sheets['Аудит']
                     
-                    # Проходим по всем колонкам и красим их
                     headers = [cell.value for cell in ws_out[1]]
-                    for col_idx, header in enumerate(headers, 1):
-                        if header in ["ИТОГО ПО ПОЛКЕ (%)", "Факт полки (шт)", "План полки (шт)"]:
-                            for row_idx in range(1, len(df_final) + 2):
-                                ws_out.cell(row=row_idx, column=col_idx).fill = color_totals
-                        else:
-                            for p_idx, p in enumerate(all_unique_products):
-                                readable_name = PRODUCT_NAMES.get(p, p)
-                                if header == f"% {readable_name}" or header == f"Шт. {readable_name}":
-                                    # Берем цвет по очереди
-                                    color_to_use = product_colors_list[p_idx % len(product_colors_list)]
-                                    for row_idx in range(1, len(df_final) + 2):
-                                        ws_out.cell(row=row_idx, column=col_idx).fill = color_to_use
+                    
+                    # Проходим по всем строкам данных (начиная со 2-й)
+                    for row_idx in range(2, len(df_final) + 2):
+                        for col_idx, header in enumerate(headers, 1):
+                            cell_value = ws_out.cell(row=row_idx, column=col_idx).value
+                            
+                            # Применяем логику ТОЛЬКО для колонок процентов (Итоговая и по препаратам)
+                            if header == "ИТОГО ПО ПОЛКЕ (%)" or str(header).startswith("%"):
+                                if cell_value in ["Not in Plan", "Нет плана"]:
+                                    ws_out.cell(row=row_idx, column=col_idx).fill = fill_grey
+                                elif isinstance(cell_value, (int, float)):
+                                    if cell_value >= 100:
+                                        ws_out.cell(row=row_idx, column=col_idx).fill = fill_green
+                                    else:
+                                        ws_out.cell(row=row_idx, column=col_idx).fill = fill_red
 
                 st.download_button(
-                    label="📥 Скачать раскрашенный Excel",
+                    label="📥 Скачать отчет (Светофор)",
                     data=buffer.getvalue(),
-                    file_name="Финальный_Аудит_Цветной.xlsx",
+                    file_name="Финальный_Аудит_Светофор.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:

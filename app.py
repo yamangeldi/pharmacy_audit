@@ -149,7 +149,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
                             total_fact_packs += fact
                         else:
                             row_data[col_pct] = "Not in Plan"
-                            row_data[col_fact] = "-"
+                            row_data[col_fact] = "Not in Plan"
 
                     if planned_items_count > 0:
                         row_data["ИТОГО ПО ПОЛКЕ (%)"] = round(sum_of_percentages / planned_items_count, 1)

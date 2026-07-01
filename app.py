@@ -42,7 +42,7 @@ if st.button("🚀 Запустить проверку", type="primary"):
             st.info("Подключение к нейросети...")
             rf = Roboflow(api_key=api_key_input)
             project = rf.workspace().project("uz_ir_pharmacy")
-            model = project.version(1).model # Поменяй на нужную версию, если обновил модель
+            model = project.version(3).model # Поменяй на нужную версию, если обновил модель
             
             st.info("Чтение планов матрицы...")
             df_matrix = pd.read_excel(matrix_file)
